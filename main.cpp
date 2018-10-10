@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <iostream>
 #include <algorithm> 
+#include <math.h> 
 #include <cstdlib>      // std::rand, std::srand
 
 using namespace std;
@@ -22,10 +23,34 @@ struct ObstaculosOrdenados{
 } ob_ord[10];
 
 
-float xPersonagemDireito = 0.0;
-float xPersonagemEsquerdo = 5.0;
+
+float xPersonagemEsquerdo = 0.0;
+float xPersonagemDireito = 5.0;
 float yPersonagemInferior = 12.0;
 float yPersonagemSuperior = 17.0;
+
+
+float yPersonagemInferiorNivel1 = 21.5;
+float yPersonagemSuperiorNivel1 = 26.5;
+
+int ilimitado = 0;
+int quadros = 30;
+bool colisao = false;
+bool flagNivel1 = true;
+int obstaculoAtual = 0;
+float posPersonagemDireito;
+float velocidadeY = 17.0;
+float g = 9.8;
+float tFinalY = 2*velocidadeY/g;
+float tempoTranscorridoPulo = 0; 
+float posYPulo;
+
+int nivel1 = false;
+
+int gameMode = 0;
+
+int pulando  = false;
+float tempoPulo = 0;
 
 
 
@@ -33,6 +58,7 @@ void init(void);
 void display(void);
 void keyboard(unsigned char key, int x, int y);
 void mouse(int button, int state, int x, int y);
+void desenha_cenario();
 void desenha_chao();
 void desenha_personagem();
 void escolhe_obstaculos();
@@ -45,6 +71,7 @@ bool sortByPos(const ObstaculosOrdenados &ob1, const ObstaculosOrdenados &ob2);
 int largurajanela = 500, alturajanela = 500;
 float adder = 0.0;
 int obstaculos[8] = {0};
+
 
 
 
@@ -69,7 +96,7 @@ void escolhe_obstaculos(){
         flag = false;
         pos = rand()%82 + 8;
         for(int j=0; j<i; j++){
-            if((pos > (obstaculos[j] - 6)) && (pos < (obstaculos[j]+6))){
+            if((pos > (obstaculos[j] - 7)) && (pos < (obstaculos[j]+7))){
                 flag = true;
                 break;
             }
@@ -99,27 +126,59 @@ void escolhe_obstaculos(){
 
 
     // degrau para subir no nivel1 de chegada como ultimo obstaculo
-    ob_ord[8].xe = 500;
-    ob_ord[8].xd = 505;
+    ob_ord[8].xe = 500.0;
+    ob_ord[8].xd = 505.0;
     ob_ord[8].yi = 12.0;
     ob_ord[8].ys = 21.4;
 
 
     // ponto de chegada como ultimo obstaculo
-    ob_ord[9].xe = 545;
-    ob_ord[9].xd = 546;
+    ob_ord[9].xe = 545.0;
+    ob_ord[9].xd = 546.0;
     ob_ord[9].yi = 21.5;
     ob_ord[9].ys = 36.5;
 
 
     sort(ob_ord, ob_ord+8, sortByPos);
 
-    for (int i=0; i<8; i++){
-        cout << i << "|| sem ordem: " << obstaculos[i] << " || com ordem: " << ob_ord[i].xe << endl;
-    }
-
 }
 
+void desenha_cenario(){
+    //terra
+    glColor3f(0.59, 0.47, 0.43);
+    glBegin(GL_POLYGON);
+        glVertex2f(0.0, -50.0);
+        glVertex2f(502.6, -50.0);
+        glVertex2f(502.6, 10.0);
+        glVertex2f(0.0, 10.0);
+    glEnd();
+
+    glBegin(GL_POLYGON);
+        glVertex2f(502.6, -50.0);
+        glVertex2f(550.0, -50.0);
+        glVertex2f(550.0, 19.5);
+        glVertex2f(502.6, 19.5);
+    glEnd();
+
+    if(!gameMode){
+        //sol
+        glColor3f(1.0, 0.76, 0.18);
+    }else{
+        //lua
+        glColor3f(0.76, 0.76, 0.76);
+    }
+    glBegin(GL_TRIANGLE_FAN); //BEGIN CIRCLE
+    glVertex2f(10.0 + adder, 34.0 + (posYPulo/2)); // center of circle
+    for (int i = 0; i <= 20; i++)   {
+        glVertex2f (
+            (10.0 + adder + (3.0 * cos(i * 3.14 * 2 / 20))), (34.0 + (posYPulo/2) + (3.0 * sin(i * 3.14 * 2 / 20)))
+            );
+    }
+    glEnd(); //END
+
+
+
+}
 
 // desenha uma face do cubo
 // a, b, c e d sao indices no vetor de vertices
@@ -174,7 +233,11 @@ void desenha_chao() {
 
 //OBSTACULOS
 /////////////////////////////////////////////////////////////
-    glColor3f(0.0, 0.0, 1.0);
+    if(!gameMode){
+        glColor3f(0.0, 0.0, 0.0);
+    }else{
+        glColor3f(1.0, 1.0, 1.0);
+    }    
     for (int i=0; i<8; i++){
         glBegin(GL_TRIANGLES);
             glVertex2f(obstaculos[i]*5, 12.0);
@@ -225,13 +288,19 @@ void desenha_personagem() {
 
 
 void init(void) {
-    glClearColor(0.0, 0.0, 0.0, 1.0); // cor para limpeza do buffer
+    //game mode (dia = 0, noite = 1)
+    gameMode = rand() % 2;
+
+    if(!gameMode){
+        glClearColor(0.0, 0.44, 0.61,1.0); //azul escuro (dia)
+    }else{
+        glClearColor(0.0, 0.0, 0.0, 1.0); //preto (noite)
+    }
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
 
-    gluOrtho2D(0.0, 50.0, 0.0, 50.0);
+    gluOrtho2D(0.0, 50.0, -10.0, 50.0);
 
-  
     glMatrixMode(GL_MODELVIEW);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); //limpa a janela
@@ -244,12 +313,11 @@ void display(void) {
     
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    gluOrtho2D(0.0 + adder, 50.0 + adder, 0.0, 50.0);
+    gluOrtho2D(0.0 + adder, 50.0 + adder, -10.0 + posYPulo, 40.0 + posYPulo);
     
+    desenha_cenario();
     desenha_chao();
     desenha_personagem();
-    
-    //adder += 5.0;
 
     glMatrixMode(GL_MODELVIEW);
     glFlush();
@@ -257,15 +325,20 @@ void display(void) {
     glutPostRedisplay();
 }
 
+
 void keyboard(unsigned char key, int x, int y) {
-    display();
+
+    if(key == 32 && !pulando && !nivel1){
+        cout << "espaço <> PUla" << endl;
+        /*yPersonagemInferior+= 15;
+        yPersonagemSuperior+=15;*/
+        tempoPulo = glutGet(GLUT_ELAPSED_TIME);
+        pulando = true;
+    }
+
+    //display();
 }
 
-int ilimitado = 1;
-int quadros = 0;
-bool colisao = false;
-bool flagNivel1 = true;
-int obstaculoAtual = 8;
 
 int main(int argc, char **argv) {
     srand(time(NULL));
@@ -291,31 +364,63 @@ int main(int argc, char **argv) {
         variacao_tempo = tempo_novo - tempo_antigo;
         if(ilimitado || variacao_tempo > 1000/quadros){
             tempo_antigo = tempo_novo;
-            adder += 1.5;
+            adder += 1.0;
             glutMainLoopEvent();
+
+            if(adder>495){
+                nivel1 = true;
+            }
+            
+            ////CHECAGEM DE COLISAO
+            posPersonagemDireito = xPersonagemDireito+adder-1.5;
+
+            colisao = false;
+            if( ob_ord[obstaculoAtual].xe  <= posPersonagemDireito && posPersonagemDireito <= ob_ord[obstaculoAtual].xd && ((ob_ord[obstaculoAtual].yi <= yPersonagemInferior && yPersonagemInferior <= ob_ord[obstaculoAtual].ys) || (ob_ord[obstaculoAtual].yi <= yPersonagemSuperior && yPersonagemSuperior <= ob_ord[obstaculoAtual].ys)  ) ){
+                colisao = true;
+
+                if(obstaculoAtual==9){
+                    cout << "ganhou" <<endl;
+                }else{
+                    cout << "perdeu" << endl;
+                }
+
+            }else if( adder > ob_ord[obstaculoAtual].xe ){
+                obstaculoAtual+=1;
+            }
+
+        }
+        if(pulando){
+            tempoTranscorridoPulo = 3* (glutGet(GLUT_ELAPSED_TIME) - tempoPulo)/1000;
+
+            if(tempoTranscorridoPulo >= tFinalY){
+                    pulando = false;
+            }
+
+            if(nivel1 && yPersonagemInferior > yPersonagemInferiorNivel1){
+                posYPulo = (velocidadeY*tempoTranscorridoPulo) - (0.5 * g * (tempoTranscorridoPulo * tempoTranscorridoPulo)); 
+                yPersonagemInferior = 12.0 + posYPulo;
+                yPersonagemSuperior = 17.0 + posYPulo;
+                if(yPersonagemInferior <= yPersonagemInferiorNivel1 ){
+                    yPersonagemInferior = yPersonagemInferiorNivel1;
+                    yPersonagemSuperior = yPersonagemSuperiorNivel1;
+                    pulando = false;
+                }
+            }else{
+                if(tempoTranscorridoPulo >= tFinalY){
+                    posYPulo = 0.0;
+                }else{
+                    posYPulo = (velocidadeY*tempoTranscorridoPulo) - (0.5 * g * (tempoTranscorridoPulo * tempoTranscorridoPulo)); 
+                }
+
+                yPersonagemInferior = 12.0 + posYPulo;
+                yPersonagemSuperior = 17.0 + posYPulo;
+            }
+
+            
+
+       
         }
 
-        if(xPersonagemEsquerdo + adder >= 500 && flagNivel1){
-            yPersonagemInferior += 9.5;
-            yPersonagemSuperior += 9.5;
-            flagNivel1 = false;
-        }
-
-        colisao = false;
-        if( ob_ord[obstaculoAtual].xe  <= xPersonagemDireito+adder && xPersonagemDireito+adder <= ob_ord[obstaculoAtual].xd && ((ob_ord[obstaculoAtual].yi <= yPersonagemInferior && yPersonagemInferior <= ob_ord[obstaculoAtual].ys) || (ob_ord[obstaculoAtual].yi <= yPersonagemSuperior && yPersonagemSuperior <= ob_ord[obstaculoAtual].ys)  ) ){
-            colisao = true;
-        }
-        else if( xPersonagemDireito+adder > ob_ord[obstaculoAtual].xe ){
-            obstaculoAtual+=1;
-        }
-
-        cout << obstaculoAtual << endl;
-        
-        if(colisao == true && obstaculoAtual==9){
-            cout << "ganhou" <<endl;
-        }else if(colisao == true){
-            cout << "perdeu" << endl;
-        }
         
 
     } 
